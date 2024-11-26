@@ -71,7 +71,6 @@ class DataManip:
                     jfile = json.load(jdata)
                 nonce = bytes.fromhex(jfile[website]["nonce"])
                 password = bytes.fromhex(jfile[website]["password"])
-                # print(jfile[website]["password"])
             except KeyError:
                 raise PasswordNotFound
         else:
@@ -80,7 +79,6 @@ class DataManip:
         formatted_master_pass = master_pass + "="*16
         master_pass_encoded = formatted_master_pass[:16].encode("utf-8")
         cipher = AES.new(master_pass_encoded, AES.MODE_EAX, nonce=nonce)
-        print(password)
         plaintext_password = cipher.decrypt(password).decode("utf-8")
 
         return plaintext_password

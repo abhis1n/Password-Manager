@@ -8,7 +8,13 @@ from halo import Halo
 from modules.encryption import DataManip
 from modules.exceptions import *
 
+from Crypto.Cipher import AES
 
+import numpy as np
+
+from PIL import Image
+
+nonce = ""
 class Manager:
     def __init__(
         self, obj: DataManip, filename: str, master_file: str, master_pass: str
@@ -25,7 +31,7 @@ class Manager:
         except UserExits:
             raise UserExits
 
-        if choice == "4":
+        if choice == "6":
             raise UserExits
 
         if choice == "1":
@@ -60,7 +66,7 @@ class Manager:
                     except pyperclip.PyperclipException:
                         print(
                             colored(
-                                f"{self.obj_.x_mark_} If you see this message on Linux use `sudo apt-get install xsel` for copying to work. {self.obj_.x_mark_}",
+                                f"{self.obj_.x_mark_} Some error. {self.obj_.x_mark_}",
                                 "red",
                             )
                         )
@@ -86,33 +92,18 @@ class Manager:
             except UserExits:
                 raise UserExits
 
-        elif choice == "5":
+        elif choice == "4":
 
             try:
-                self.delete_db(self.masterPass)
-            except MasterPasswordIncorrect:
-                print(
-                    colored(
-                        f"{self.obj_.x_mark_} Master password is incorrect {self.obj_.x_mark_}",
-                        "red",
-                    )
-                )
-                return self.delete_db(self.masterPass)
+                self.stegno_password()
+                return self.begin()
             except UserExits:
                 raise UserExits
 
-        elif choice == "6":
-
+        elif choice == "5":
             try:
-                self.delete_all_data(self.masterPass)
-            except MasterPasswordIncorrect:
-                print(
-                    colored(
-                        f"{self.obj_.x_mark_} Master password is incorrect {self.obj_.x_mark_}",
-                        "red",
-                    )
-                )
-                return self.delete_all_data(self.masterPass)
+                self.stegno_password_decrypt()
+                return self.begin()
             except UserExits:
                 raise UserExits
 
@@ -122,7 +113,9 @@ class Manager:
         print(colored("1) Add/Update a password", "blue"))
         print(colored("2) Look up a stored password", "blue"))
         print(colored("3) Delete a password", "blue"))
-        print(colored("4) Exit program", "blue"))
+        print(colored("4) Save password into image", "blue"))
+        print(colored("5) Decrypt password from image", "blue"))
+        print(colored("6) Exit program", "blue"))
 
         choice = input("Enter a choice: ")
 
@@ -291,3 +284,82 @@ class Manager:
                     )
                 )
                 return self.begin()
+
+    def stegno_password(self):
+        global nonce
+        ip = input("Enter password: ")
+
+        concatenated_master = self.masterPass + "="*16
+
+        key = concatenated_master[:16].encode("utf-8")
+
+        cipher = AES.new(key, AES.MODE_EAX)
+
+        nonce = cipher.nonce
+
+        data_to_encrypt = ip.encode("utf-8")
+
+        encrypted_data = cipher.encrypt(data_to_encrypt).hex()
+
+        print(encrypted_data)
+
+        # save into image
+        # get binary
+        ascii_values = np.array([ord(char) for char in encrypted_data], dtype=int)
+
+        binary_array = np.zeros((len(ascii_values), 8), dtype=int)
+
+        for i, ascii_value in enumerate(ascii_values):
+            for bit_position in range(8):
+                binary_array[i, bit_position] = (ascii_value >> (7 - bit_position)) & 1
+
+        # get Image
+        # Scale binary values (0 or 1) to grayscale (0 or 255)
+        grayscale_array = binary_array * 255
+        output_file="binary_image.png"
+
+        # Create an image from the array
+        image = Image.fromarray(grayscale_array.astype('uint8'), mode='L')  # 'L' mode for grayscale
+
+        # Save the image to a file
+        image.save(output_file)
+        print(f"Image saved as {output_file}")
+
+        # print(binary_array)
+        # print(binary_array2)
+        # working, tested
+
+        self.begin()
+
+    def stegno_password_decrypt(self):
+        global nonce
+        concatenated_master = self.masterPass + "="*16
+
+        key = concatenated_master[:16].encode("utf-8")
+
+        # check image read
+        # Open the image
+        output_file="binary_image.png"
+        image = Image.open(output_file).convert('L')  # 'L' mode for grayscale
+
+        # Convert the image to a numpy array
+        grayscale_array = np.array(image)
+
+        # Threshold the grayscale values to binary (0 or 1)
+        binary_array2 = (grayscale_array // 255)
+        # decrypt
+        # Convert each row of the 2D binary array into an 8-bit binary string
+        binary_strings = [''.join(str(bit) for bit in row) for row in binary_array2]
+
+        # Convert the binary strings into their corresponding characters
+        characters = [chr(int(binary_string, 2)) for binary_string in binary_strings]
+
+        # Join the characters into a single string
+        result_string = ''.join(characters)
+
+        # check decryption
+        cipher = AES.new(key, AES.MODE_EAX, nonce=nonce)
+        decrypted_data = cipher.decrypt(bytes.fromhex(result_string)).decode("utf-8")
+        print("Decrypted data:", decrypted_data)
+
+        self.begin()
